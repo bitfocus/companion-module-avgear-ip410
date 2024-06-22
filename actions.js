@@ -32,7 +32,7 @@ export function updateActions() {
       ],
       callback: async (event) => {
         const { socket, state } = event.options;
-        this.setPowerState(socket, state);
+        this.setPowerState(socket, state == 0 ? "Off" : "On");
       },
     },
     togglePowerState: {

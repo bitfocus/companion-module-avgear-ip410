@@ -233,9 +233,10 @@ class AVGIP410 extends InstanceBase {
     }
 
     const actualSocket = socket + 60; // Convert 1-4 to 61-64
-    const url = `http://${ip}/set.cmd?user=${username}+pass=${password}+cmd=setpower&p${actualSocket}=${
-      state === "On" ? 1 : 0
-    }`;
+    const commandValue = state === "On" ? 1 : 0;
+    const url = `http://${ip}/set.cmd?user=${username}+pass=${password}+cmd=setpower&p${actualSocket}=${commandValue}`;
+
+    this.log("debug", `Constructed URL: ${url}`);  // Log the constructed URL
 
     try {
       //const options = { method: 'POST' }
