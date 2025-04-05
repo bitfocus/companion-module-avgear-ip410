@@ -35,3 +35,9 @@ The module exposes the following feedbacks
 
 ### 1.0.0
 First release
+
+### 1.1.0
+Adds fix for special characters in user names and passwords
+
+### 1.2.0
+Switches API away from Raw HTTP to JSON. Apparently, the JSON API doesn't have the same issues as the RAW HTTP api whereby the system might report incorrect on\off state. This is a (now) a known issue with the basic HTTP interface with the recommened fix being to move to JSON.
