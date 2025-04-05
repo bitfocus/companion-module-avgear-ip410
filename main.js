@@ -80,7 +80,7 @@ class AVGIP410 extends InstanceBase {
 
     this.updateStatus(InstanceStatus.Ok);
     this.updateActions();
-    this.getSocketNames();
+    this.fetchSocketData();
     this.updateVariables();
     this.startPolling();
     this.updateFeedbacks();
@@ -90,138 +90,73 @@ class AVGIP410 extends InstanceBase {
     this.log("info", "Config updated:", config);
     this.config = config || {};
     this.updateActions();
-    this.getSocketNames();
+    this.fetchSocketData();
     this.updateVariables();
     this.startPolling();
     this.updateFeedbacks();
   }
 
-  //Poll the device to refresh both socket state and name
-  startPolling() {
-    this.log("info", "Starting polling");
-    this.updateStatus(InstanceStatus.Connecting);
-    if (this.pollingInterval) {
-      clearInterval(this.pollingInterval);
-    }
-
-    const interval = this.config.pollingInterval || 0; // Default to off if not configured
-    if (interval > 0) {
-      this.pollingInterval = setInterval(() => {
-        this.getPowerState();
-        this.getSocketNames();
-      }, interval);
-    } else {
-      this.log("info", "Polling is disabled because the interval is set to 0");
-    }
+// Replace getSocketNames and getPowerState calls with fetchSocketData
+startPolling() {
+  this.log("info", "Starting polling");
+  this.updateStatus(InstanceStatus.Connecting);
+  if (this.pollingInterval) {
+    clearInterval(this.pollingInterval);
   }
 
-  //Get socket names via http
-  async getSocketNames() {
-    this.log("debug", "Getting socket names");
-    const { ip, username, password } = this.config;
-    if (!ip || !username || !password) {
-      this.log("error", "IP address, username, or password is not set");
-      return;
-    }
+  const interval = this.config.pollingInterval || 0; // Default to off if not configured
+  if (interval > 0) {
+    this.pollingInterval = setInterval(() => {
+      this.fetchSocketData();
+    }, interval);
+  } else {
+    this.log("info", "Polling is disabled because the interval is set to 0");
+  }
+}
 
-    const url = `http://${username}:${encodeURIComponent(password)}@${ip}/goform/getpowername`;
-
-    try {
-      const response = await got(url, { timeout: { request: 1000 } });
-      this.log("debug", `Socket Names: ${response.body}`);
-      this.parseSocketNames(response.body);
-    } catch (error) {
-      if (error.code === "ETIMEDOUT") {
-        this.log("error", "IP410 module: " + ip + " is unreachable");
-        this.updateStatus(InstanceStatus.ConnectionFailure);
-      } else {
-        this.log("error", `Error: ${error.message}`);
-        this.updateStatus(InstanceStatus.Disconnected);
-      }
-    }
+ // Consolidated function to fetch and parse socket names and power states
+async fetchSocketData() {
+  this.log("debug", "Fetching socket data via JSON API!");
+  const { ip, username, password } = this.config;
+  if (!ip || !username || !password) {
+    this.log("error", "IP address, username, or password is not set");
+    return;
   }
 
-  //Parse returned data for socket names
-  parseSocketNames(data) {
-    this.log("debug", "Parsing socket names:", data);
-    const regex = /p6(\d)_name=([\w\d]+)/g;
-    let match;
+  const url = `http://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${ip}/json.cmd?getpower`;
 
-    const variables = {};
+  try {
+    const response = await got(url, { timeout: { request: 1000 }, responseType: 'json' });
+    const data = response.body;
 
-    while ((match = regex.exec(data)) !== null) {
-      let socket = match[1]; // because the LSN is 1-4, we can just steal that
-      const name = match[2];
-      variables[`p${socket}_name`] = name;
-
-      this.log("debug", "Socket" + socket + " name " + name);
-    }
-
-    this.log("debug", `Parsed socket names: ${JSON.stringify(variables)}`);
-
-    this.setVariableValues(variables);
-  }
-
-  //Get power state via http
-  async getPowerState() {
-    this.log("debug", "Getting power state");
-    const { ip, username, password, pollingInterval } = this.config;
-    if (!ip || !username || !password) {
-      this.log("error", "IP address, username, or password is not set");
-      return;
-    }
-
-    const url = `http://${ip}/set.cmd?user=${username}+pass=${encodeURIComponent(password)}+cmd=getpower`;
-
-    try {
-      const response = await got(url, {
-        timeout: { request: pollingInterval },
-      });
-      this.parsePowerStatus(response.body);
+    if (data && data.result && data.result.RL) {
+      const variables = {};
+      const feedbacks = {};
       this.updateStatus(InstanceStatus.Ok);
-      // 	// Simulated data for debugging
-      // 	const simulatedData = `
-      // 	<p>
-      // 	  p61=1,p62=0,p63=1,p64=0
-      // 	</p>
-      //   `;
 
-      // 	this.parsePowerStatus(simulatedData)
+      data.result.RL.forEach((socket) => {
+        const socketId = `p${socket.id}`;
+        variables[`${socketId}_name`] = socket.name;
+        variables[socketId] = socket.state === 1 ? "On" : "Off";
 
-      // end data sim block
-      this.log("debug", "polling request for " + url);
-    } catch (error) {
-      if (error.code === "ETIMEDOUT") {
-        this.log("error", "IP410 module: " + ip + " is unreachable");
-        this.updateStatus(InstanceStatus.ConnectionFailure);
-      } else {
-        this.log("error", `Error: ${error.message}`);
-        this.updateStatus(InstanceStatus.Disconnected);
-      }
+        this.log("debug", `Socket ${socket.id}: Name=${socket.name}, State=${variables[socketId]}`);
+      });
+
+      this.setVariableValues(variables);
+      this.checkFeedbacks("socket_state");
+    } else {
+      this.log("error", "Invalid JSON response structure");
+    }
+  } catch (error) {
+    if (error.code === "ETIMEDOUT") {
+      this.log("error", "IP410 module: " + ip + " is unreachable");
+      this.updateStatus(InstanceStatus.ConnectionFailure);
+    } else {
+      this.log("error", `Error: ${error.message}`);
+      this.updateStatus(InstanceStatus.Disconnected);
     }
   }
-
-  //Parse returned http power status data
-  parsePowerStatus(data) {
-    this.log("debug", "Parsing power status:", data);
-    const regex = /p6(\d)=(\d)/g;
-    let match;
-
-    const variables = {};
-
-    while ((match = regex.exec(data)) !== null) {
-      let socket = match[1]; //because the LSN is 1-4, we can just steal that
-      const state = match[2] === "1" ? "On" : "Off";
-      variables[`p${socket}`] = state;
-
-      this.log("debug", "Num" + socket + " state " + state);
-    }
-
-    this.log("debug", `Parsed variables: ${JSON.stringify(variables)}`);
-
-    this.setVariableValues(variables);
-    this.checkFeedbacks("socket_state");
-  }
+}
 
   // Set power state via http then call update status
   async setPowerState(socket, state) {
@@ -234,7 +169,7 @@ class AVGIP410 extends InstanceBase {
 
     const actualSocket = socket + 60; // Convert 1-4 to 61-64
     const commandValue = state === "On" ? 1 : 0;
-    const url = `http://${ip}/set.cmd?user=${username}+pass=${encodeURIComponent(password)}+cmd=setpower&p${actualSocket}=${commandValue}`;
+    const url = `http://${ip}/set.cmd?user=${encodeURIComponent(username)}+pass=${encodeURIComponent(password)}+cmd=setpower&p${actualSocket}=${commandValue}`;
 
     this.log("debug", `Constructed URL: ${url}`);  // Log the constructed URL
 
@@ -242,7 +177,7 @@ class AVGIP410 extends InstanceBase {
       //const options = { method: 'POST' }
       const response = await got(url, { timeout: { request: 1000 } });
       this.log("debug", `Set Power State Response: ${response.body}`);
-      this.getPowerState(); // Refresh power status after setting
+      this.fetchSocketData(); // Refresh power status after setting
     } catch (error) {
       if (error.code === "ETIMEDOUT") {
         this.log("error", "IP410 module: " + ip + " is unreachable");
