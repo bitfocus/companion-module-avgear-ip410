@@ -3,7 +3,7 @@
 	"name": "avgear-ip410",
 	"shortname": "IP410",
 	"description": "Companion module for AVGear IP410 PDU",
-	"version": "1.1.0",
+	"version": "1.2.1",
 	"license": "MIT",
 	"repository": "git+https://github.com/bitfocus/companion-module-avgear-ip410.git",
 	"bugs": "https://github.com/bitfocus/companion-module-avgear-ip410/issues",
