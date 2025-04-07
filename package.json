@@ -13,7 +13,7 @@
 		"url": "git+https://github.com/bitfocus/companion-module-your-module-name.git"
 	},
 	"dependencies": {
-		"@companion-module/base": "~1.7.0",
+		"@companion-module/base": "~1.11.3",
 		"got": "~13.0.0"
 	},
 	"devDependencies": {
