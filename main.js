@@ -148,7 +148,10 @@ async fetchSocketData() {
       this.log("error", "Invalid JSON response structure");
     }
   } catch (error) {
-    if (error.code === "ETIMEDOUT") {
+    if (error.response && error.response.statusCode === 401) {
+      this.log("error", "Authentication failed: Invalid username or password");
+      this.updateStatus(InstanceStatus.AuthenticationFailure);
+    } else if (error.code === "ETIMEDOUT") {
       this.log("error", "IP410 module: " + ip + " is unreachable");
       this.updateStatus(InstanceStatus.ConnectionFailure);
     } else {
